@@ -1,16 +1,19 @@
-# gsplit
+# 🍺 Guinness Rater
 
-A new Flutter project.
+Rate Guinness pints with AI-powered pour analysis.
 
-## Getting Started
+## Features
+- 📸 AI photo analysis
+- 🗺️ Interactive map with custom markers
+- 🍺 Unique glass rating UI
+- 🔥 Real-time pub ratings
+- 📊 Review system
 
-This project is a starting point for a Flutter application.
+## Tech Stack
+- Flutter
+- Firebase (Firestore, Storage, Auth)
+- Google Maps / OpenStreetMap
+- Gemini AI
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Status
+MVP in development - Launch planned Q1 2025
