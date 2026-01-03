@@ -1,0 +1,13 @@
+# build.yaml - KORREKTE VERSION:
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          any_map: true
+          explicit_to_json: true
+          # ❌ ENTFERNE 'converters' komplett!
+          # converters:  ← DAS LÖSCHEN!
+          #   geo_point: GeoPointConverter
+          #   date_time: DateTimeConverter
+          #   date_time_nullable: DateTimeNullableConverter
