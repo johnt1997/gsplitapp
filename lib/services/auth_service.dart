@@ -29,6 +29,9 @@ class AuthService {
       User? firebaseUser = result.user;
 
       if (firebaseUser != null) {
+        // Name auch ins Auth-Profil, damit Reviews ihn direkt mitschreiben können
+        await firebaseUser.updateDisplayName(displayName);
+
         // 2. Das AppUser-Dokument für Firestore erstellen
         // Wir setzen Standardwerte für den Start
         AppUser newUser = AppUser(

@@ -3,35 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlong;
 import '../models/models.dart';
-import 'map_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:math';
-import '../widgets/mini_guinness_marker.dart'; // ✅ Importieren!
+import '../widgets/mini_guinness_marker.dart';
 
-class OpenStreetMapService implements MapService {
-  late MapController _mapController;
-
-  @override
-  Future<void> initialize() async {
-    _mapController = MapController();
-  }
-
-  @override
+class OpenStreetMapService {
   Widget buildMap({
+    required MapController mapController,
     required List<Pub> pubs,
     required latlong.LatLng center,
     required double zoom,
     required void Function(Pub) onMarkerTap,
     required void Function(latlong.LatLng) onMapTap,
+    void Function(latlong.LatLng)? onMapLongPress,
     latlong.LatLng? userLocation,
     bool showUserLocation = true,
   }) {
     return FlutterMap(
-      mapController: _mapController,
+      mapController: mapController,
       options: MapOptions(
         initialCenter: center,
         initialZoom: zoom,
         onTap: (tapPosition, point) => onMapTap(point),
+        onLongPress: (tapPosition, point) => onMapLongPress?.call(point),
         // Begrenzung, damit man nicht ins Unendliche zoomt
         minZoom: 5,
         maxZoom: 18,
@@ -88,30 +80,5 @@ class OpenStreetMapService implements MapService {
         child: MiniGuinnessMarker(rating: pub.averageRating, isHot: pub.isHot),
       ),
     );
-  }
-
-  @override
-  latlong.LatLng convertGeoPoint(GeoPoint geoPoint) {
-    return latlong.LatLng(geoPoint.latitude, geoPoint.longitude);
-  }
-
-  @override
-  double calculateDistance(latlong.LatLng point1, latlong.LatLng point2) {
-    final lat1 = point1.latitude * (pi / 180.0);
-    final lon1 = point1.longitude * (pi / 180.0);
-    final lat2 = point2.latitude * (pi / 180.0);
-    final lon2 = point2.longitude * (pi / 180.0);
-    final dLat = lat2 - lat1;
-    final dLon = lon2 - lon1;
-    final a =
-        sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    return 6371.0 * c;
-  }
-
-  @override
-  void dispose() {
-    _mapController.dispose();
   }
 }

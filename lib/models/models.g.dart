@@ -128,6 +128,7 @@ const _$GuinnessTypeEnumMap = {
 Review _$ReviewFromJson(Map json) => Review(
   id: json['id'] as String,
   userId: json['userId'] as String,
+  userName: json['userName'] as String?,
   pubId: json['pubId'] as String,
   rating: (json['rating'] as num).toDouble(),
   comment: json['comment'] as String,
@@ -143,6 +144,9 @@ Review _$ReviewFromJson(Map json) => Review(
     (json['createdAt'] as num).toInt(),
   ),
   likes: (json['likes'] as num?)?.toInt() ?? 0,
+  likedBy:
+      (json['likedBy'] as List<dynamic>?)?.map((e) => e as String).toList() ??
+      const [],
   isPublic: json['isPublic'] as bool? ?? true,
   guinnessType: $enumDecodeNullable(
     _$GuinnessTypeEnumMap,
@@ -155,6 +159,7 @@ Review _$ReviewFromJson(Map json) => Review(
 Map<String, dynamic> _$ReviewToJson(Review instance) => <String, dynamic>{
   'id': instance.id,
   'userId': instance.userId,
+  'userName': instance.userName,
   'pubId': instance.pubId,
   'rating': instance.rating,
   'comment': instance.comment,
@@ -166,6 +171,7 @@ Map<String, dynamic> _$ReviewToJson(Review instance) => <String, dynamic>{
   'aiColorScore': instance.aiColorScore,
   'createdAt': const DateTimeConverter().toJson(instance.createdAt),
   'likes': instance.likes,
+  'likedBy': instance.likedBy,
   'isPublic': instance.isPublic,
   'guinnessType': _$GuinnessTypeEnumMap[instance.guinnessType],
   'price': instance.price,

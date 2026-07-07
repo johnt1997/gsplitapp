@@ -1,11 +1,12 @@
-import 'dart:io';
-import 'dart:math';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+// Material's Badge-Widget ausblenden — wir nutzen unser eigenes Badge-Model
+import 'package:flutter/material.dart' hide Badge;
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../services/ai_service.dart';
+import '../services/user_stats_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/models.dart';
 
 enum ReviewState {
@@ -20,7 +21,6 @@ enum ReviewState {
 
 class ReviewProvider extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final Random _random = Random();
   final AiService _aiService = AiService();
   final Uuid _uuid = Uuid();
   List<String> _aiKeywords = [];
@@ -43,6 +43,10 @@ class ReviewProvider extends ChangeNotifier {
   // KI KRAM
   double? _aiScore;
   bool _isPerfectPour = false;
+
+  // Nach dem Submit neu freigeschaltete Badges (für "BADGE UNLOCKED!")
+  List<Badge> _newBadges = [];
+  List<Badge> get newBadges => _newBadges;
 
   // UI STATUS
   bool _isSubmitting = false;
@@ -112,7 +116,7 @@ class ReviewProvider extends ChangeNotifier {
     if (_photo == null) return;
 
     try {
-      final result = await _aiService.analyzePint(_photo!.path);
+      final result = await _aiService.analyzePint(_photo!);
 
       double score = (result['score'] as num).toDouble();
       bool isGuinness = result['is_guinness'] ?? true;
@@ -129,9 +133,7 @@ class ReviewProvider extends ChangeNotifier {
       // Speichern in privaten Variablen
       _aiScore = score;
       _overallRating = score; // Slider automatisch einstellen
-
-      // Falls du isPerfectPour als Variable hast:
-      // _isPerfectPour = score >= 9.5;
+      _isPerfectPour = score >= 8.5; // Gleiche Schwelle wie Review.setAIScore
     } catch (e) {
       print("AI Error: $e");
       _aiScore = null;
@@ -166,19 +168,64 @@ class ReviewProvider extends ChangeNotifier {
 
   // ---------------- SPEICHERN (Das Wichtigste) ----------------
 
-  Future<void> submitReview(String pubId, String userId) async {
+  Future<void> submitReview(String pubId) async {
     if (!isValid || _isSubmitting) return;
+
+    // Review gehört immer dem eingeloggten User — keine IDs von außen
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _errorMessage = 'Nicht eingeloggt. Bitte neu anmelden.';
+      _state = ReviewState.ERROR;
+      notifyListeners();
+      return;
+    }
 
     _isSubmitting = true;
     _state = ReviewState.SUBMITTING;
     notifyListeners();
 
     try {
+      final reviewId = _uuid.v4();
+
+      // Anzeigename: Auth-Profil -> users-Doc -> E-Mail-Prefix
+      String userName = user.displayName ?? '';
+      if (userName.isEmpty) {
+        final userDoc = await _db.collection('users').doc(user.uid).get();
+        userName =
+            (userDoc.data()?['displayName'] as String?) ??
+            user.email?.split('@').first ??
+            'Guinness Fan';
+      }
+
+      // Foto zu Firebase Storage — Upload-Fehler sind nicht fatal,
+      // das Review wird dann ohne Foto gespeichert.
+      // Hartes Timeout: Ohne aktivierten Storage-Bucket retried das SDK
+      // sonst endlos und der User hängt für immer im Lade-Spinner.
+      final photoUrls = <String>[];
+      try {
+        final bytes = await _photo!.readAsBytes();
+        final storage = FirebaseStorage.instance;
+        storage.setMaxUploadRetryTime(const Duration(seconds: 10));
+        storage.setMaxOperationRetryTime(const Duration(seconds: 10));
+        final storageRef = storage.ref('reviews/$reviewId.jpg');
+        await storageRef
+            .putData(bytes, SettableMetadata(contentType: 'image/jpeg'))
+            .timeout(const Duration(seconds: 20));
+        photoUrls.add(
+          await storageRef.getDownloadURL().timeout(
+            const Duration(seconds: 10),
+          ),
+        );
+      } catch (e) {
+        print("STORAGE ERROR (Review wird ohne Foto gespeichert): $e");
+      }
+
       // Wir bauen die Daten genau so, wie das neue Model sie braucht
       final reviewData = {
-        'reviewId': _uuid.v4(), // Optional, Firestore macht eigene IDs
+        'reviewId': reviewId,
         'pubId': pubId,
-        'userId': userId,
+        'userId': user.uid,
+        'userName': userName,
 
         // --- WICHTIG: DIE NEUEN FELDER ---
         'rating': _overallRating, // Das Haupt-Rating (vom Slider)
@@ -195,11 +242,11 @@ class ReviewProvider extends ChangeNotifier {
             ?.index, // WICHTIG: .index speichern (Int), nicht das Enum objekt
         'isPerfectPour': _isPerfectPour,
         'aiColorScore': _aiScore,
-        'photoUrls':
-            [], // Upload kommt später, leere Liste damit es nicht null ist
+        'photoUrls': photoUrls,
         // --- META ---
         'createdAt': FieldValue.serverTimestamp(),
         'likes': 0,
+        'likedBy': <String>[],
         'isPublic': true,
       };
 
@@ -228,6 +275,19 @@ class ReviewProvider extends ChangeNotifier {
         });
       }
 
+      // 3. --- USER-STATS & BADGES (nicht fatal bei Fehler) ---
+      try {
+        _newBadges = await UserStatsService().recordReview(
+          pubId: pubId,
+          rating: _overallRating,
+          isPerfectPour: _isPerfectPour,
+          guinnessType: _guinnessType,
+        );
+      } catch (e) {
+        print("STATS ERROR: $e");
+        _newBadges = [];
+      }
+
       _state = ReviewState.SUCCESS;
       notifyListeners();
     } catch (e) {
@@ -252,6 +312,7 @@ class ReviewProvider extends ChangeNotifier {
     _isPerfectPour = false;
     _isSubmitting = false;
     _errorMessage = null;
+    _newBadges = [];
     notifyListeners();
   }
 }

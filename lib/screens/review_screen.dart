@@ -14,14 +14,12 @@ class ReviewScreen extends StatefulWidget {
   final String pubId;
   final String pubName;
   final String pubAddress;
-  final String userId;
 
   const ReviewScreen({
     Key? key,
     required this.pubId,
     required this.pubName,
     required this.pubAddress,
-    required this.userId,
   }) : super(key: key);
 
   @override
@@ -147,7 +145,7 @@ class _ReviewScreenState extends State<ReviewScreen>
       case ReviewState.SUBMITTING:
         return _buildSubmitting();
       case ReviewState.SUCCESS:
-        return _buildSuccess();
+        return _buildSuccess(provider);
       case ReviewState.ERROR:
         return _buildError(provider);
     }
@@ -630,7 +628,7 @@ class _ReviewScreenState extends State<ReviewScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Here is what Gemini saw:",
+              "Here is what the AI Master Brewer saw:",
               style: TextStyle(
                 color: Colors.white70,
                 fontWeight: FontWeight.bold,
@@ -679,22 +677,66 @@ class _ReviewScreenState extends State<ReviewScreen>
     return Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
   }
 
-  Widget _buildSuccess() {
+  Widget _buildSuccess(ReviewProvider provider) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.check_circle, size: 80, color: Color(0xFF50C878)),
-          SizedBox(height: 24),
-          Text(
-            'REVIEW POSTED!',
-            style: TextStyle(
-              color: Color(0xFF50C878),
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, size: 80, color: Color(0xFF50C878)),
+            SizedBox(height: 24),
+            Text(
+              'REVIEW POSTED!',
+              style: TextStyle(
+                color: Color(0xFF50C878),
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-        ],
+            if (provider.newBadges.isNotEmpty) ...[
+              SizedBox(height: 40),
+              Text(
+                '🏆 BADGE UNLOCKED!',
+                style: TextStyle(
+                  color: Color(0xFFD4AF37),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                ),
+              ),
+              SizedBox(height: 16),
+              for (final badge in provider.newBadges)
+                Container(
+                  margin: EdgeInsets.only(bottom: 12),
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF1A1A1A),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: badge.color, width: 1.5),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        badge.name.toUpperCase(),
+                        style: TextStyle(
+                          color: badge.color,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        badge.description,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -722,11 +764,12 @@ class _ReviewScreenState extends State<ReviewScreen>
 
     try {
       // Aufruf der echten Provider-Methode
-      await provider.submitReview(widget.pubId, widget.userId);
+      await provider.submitReview(widget.pubId);
 
-      // Wenn erfolgreich -> Schließen
+      // Wenn erfolgreich -> Schließen (mit Badge-Unlock etwas länger anzeigen)
       if (provider.state == ReviewState.SUCCESS && mounted) {
-        _autoCloseTimer = Timer(Duration(seconds: 2), () {
+        final closeDelay = provider.newBadges.isNotEmpty ? 5 : 2;
+        _autoCloseTimer = Timer(Duration(seconds: closeDelay), () {
           if (mounted) {
             Navigator.pop(context);
             provider.reset();

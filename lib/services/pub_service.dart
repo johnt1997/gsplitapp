@@ -17,39 +17,19 @@ class PubService {
     });
   }
 
-  // 2. Einmaliges Hochladen der Fake-Daten (Seeding)
-  Future<void> seedFakePubs() async {
-    // Deine Fake-Liste (Hardcoded für den Start)
-    final List<Map<String, dynamic>> fakePubsData = [
-      {
-        'name': 'The Temple Bar',
-        'location': const GeoPoint(53.3456, -6.2672),
-        'address': '47-48 Temple Bar, Dublin',
-        'averageRating': 8.5,
-        'reviewCount': 142,
-        'isHot': true,
-      },
-      {
-        'name': 'The Brazen Head',
-        'location': const GeoPoint(53.3433, -6.2755),
-        'address': '20 Lower Bridge St, Dublin',
-        'averageRating': 9.2,
-        'reviewCount': 89,
-        'isHot': false,
-      },
-      {
-        'name': 'Mulligan\'s',
-        'location': const GeoPoint(53.3444, -6.2550),
-        'address': '8 Poolbeg St, Dublin',
-        'averageRating': 7.8,
-        'reviewCount': 203,
-        'isHot': true,
-      },
-    ];
-
-    for (var data in fakePubsData) {
-      await _db.collection('pubs').add(data);
-    }
-    print("✅ FAKE PUBS IN DATENBANK GELADEN!");
+  // 2. Neuen Pub anlegen (Long-Press auf die Karte)
+  Future<void> addPub({
+    required String name,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final pub = Pub(
+      id: '', // Firestore vergibt die ID
+      name: name,
+      address: address,
+      location: GeoPoint(latitude, longitude),
+    );
+    await _db.collection('pubs').add(pub.toFirestore());
   }
 }

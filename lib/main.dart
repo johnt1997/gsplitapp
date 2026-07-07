@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Eigene Dateien
 import 'firebase_options.dart';
 import 'auth_wrapper.dart';
 import 'providers/review_provider.dart';
-import 'screens/review_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    // Ohne .env läuft die App trotzdem — nur die AI-Analyse fällt aus
+    print("Keine .env gefunden — AI-Analyse deaktiviert: $e");
+  }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(
@@ -36,19 +42,6 @@ class GuinnessApp extends StatelessWidget {
         fontFamily: 'SF Pro Display',
       ),
       home: const AuthWrapper(),
-      // Routes sind optional, da du Navigator.push verwendest,
-      // aber für Deep Links sind sie gut:
-      routes: {
-        '/review': (context) {
-          // Fallback-Route (In Produktion meist über Navigator.push mit Argumenten)
-          return const ReviewScreen(
-            pubId: 'demo',
-            pubName: 'Select Pub',
-            pubAddress: '',
-            userId: 'unknown',
-          );
-        },
-      },
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/models.dart';
 import '../screens/review_screen.dart';
 import '../providers/review_provider.dart';
@@ -15,7 +17,7 @@ class BrutalPubSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 🔥 DER LIVE-STREAM: Wir hören direkt auf die 'reviews' Collection
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('reviews')
           .where('pubId', isEqualTo: pub.id)
@@ -23,23 +25,13 @@ class BrutalPubSheet extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         // 1. DATEN VERARBEITEN
+        // fromFirestore versteht guinnessType als Int-Index und den
+        // (direkt nach dem Posten noch null) serverTimestamp — fromJson nicht.
         List<Review> liveReviews = [];
         if (snapshot.hasData) {
-          liveReviews = snapshot.data!.docs.map((doc) {
-            // Wir nutzen fromFirestore, müssen aber Data+ID übergeben
-            // Da fromFirestore im Model etwas anders aufgebaut ist, nutzen wir hier einen schnellen Fix:
-            final data = doc.data() as Map<String, dynamic>;
-            // Wir nutzen fromJson, weil das einfacher ist für QuerySnapshot maps
-            return Review.fromJson({
-              ...data,
-              'id': doc.id,
-              // Timestamp Fix für JSON
-              'createdAt':
-                  (data['createdAt'] as Timestamp?)?.millisecondsSinceEpoch ??
-                  DateTime.now().millisecondsSinceEpoch,
-              'lastReviewDate': null, // Ignorieren wir hier
-            });
-          }).toList();
+          liveReviews = snapshot.data!.docs
+              .map((doc) => Review.fromFirestore(doc, null))
+              .toList();
 
           // Sortieren in Dart (verhindert Index-Fehler in Firebase)
           liveReviews.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -271,7 +263,6 @@ class BrutalPubSheet extends StatelessWidget {
                               pubId: pub.id,
                               pubName: pub.name,
                               pubAddress: pub.address,
-                              userId: "test_user",
                             ),
                           ),
                         ),
@@ -369,6 +360,54 @@ class BrutalPubSheet extends StatelessWidget {
     );
   }
 
+  // Ein Like pro User — Toggle über das likedBy-Array
+  Widget _buildLikeButton(Review review) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final liked = uid != null && review.likedBy.contains(uid);
+
+    return GestureDetector(
+      onTap: uid == null ? null : () => _toggleLike(review, uid),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              liked ? Icons.favorite : Icons.favorite_border,
+              size: 16,
+              color: liked ? const Color(0xFFD4AF37) : Colors.white38,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '${review.likedBy.length}',
+              style: TextStyle(
+                color: liked ? const Color(0xFFD4AF37) : Colors.white38,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleLike(Review review, String uid) {
+    HapticFeedback.lightImpact();
+    final liked = review.likedBy.contains(uid);
+    FirebaseFirestore.instance.collection('reviews').doc(review.id).update({
+      'likedBy': liked
+          ? FieldValue.arrayRemove([uid])
+          : FieldValue.arrayUnion([uid]),
+      'likes': FieldValue.increment(liked ? -1 : 1),
+    });
+  }
+
+  String _formatDate(DateTime d) {
+    return "${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}";
+  }
+
   void _showReviewDetails(BuildContext context, Review review) {
     showDialog(
       context: context,
@@ -393,12 +432,47 @@ class BrutalPubSheet extends StatelessWidget {
               const Icon(Icons.whatshot, color: Color(0xFFD4AF37)),
           ],
         ),
-        content: Text(
-          review.comment.isNotEmpty ? review.comment : "No comment.",
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            height: 1.5,
+        // Feste Breite: width:infinity im Bild bricht sonst die
+        // Intrinsic-Width-Berechnung des AlertDialogs (isFinite-Assertion)
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (review.primaryPhotoUrl != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    review.primaryPhotoUrl!,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      // Bild ausblenden, aber Fehler sichtbar loggen (z.B. CORS auf Web)
+                      debugPrint(
+                        'Review-Foto konnte nicht geladen werden: $error',
+                      );
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                "${(review.userName ?? 'Anonymous')} — ${_formatDate(review.createdAt)}",
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                review.comment.isNotEmpty ? review.comment : "No comment.",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -436,6 +510,7 @@ class BrutalPubSheet extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -476,8 +551,54 @@ class BrutalPubSheet extends StatelessWidget {
                     ],
                   ),
                 ),
+                // WER & WANN
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        (review.userName ?? 'ANONYMOUS').toUpperCase(),
+                        style: const TextStyle(
+                          color: Color(0xFFF5E6D3),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _formatDate(review.createdAt),
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
+            if (review.primaryPhotoUrl != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  review.primaryPhotoUrl!,
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    // Bild ausblenden, aber Fehler sichtbar loggen (z.B. CORS auf Web)
+                    debugPrint(
+                      'Review-Foto konnte nicht geladen werden: $error',
+                    );
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
             Row(
               children: [
                 if (review.price != null && review.price! > 0) ...[
@@ -500,6 +621,8 @@ class BrutalPubSheet extends StatelessWidget {
                       style: TextStyle(color: Colors.white38, fontSize: 10),
                     ),
                   ),
+                const Spacer(),
+                _buildLikeButton(review),
               ],
             ),
             if (review.comment.isNotEmpty) ...[

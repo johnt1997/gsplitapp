@@ -260,39 +260,6 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         ),
 
-                        const SizedBox(height: 20),
-
-                        // GOOGLE BUTTON (Minimal)
-                        OutlinedButton.icon(
-                          icon: const Icon(
-                            Icons.g_mobiledata,
-                            size: 30,
-                            color: Colors.white,
-                          ),
-                          label: const Text(
-                            "CONTINUE WITH GOOGLE",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white24),
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 15,
-                              horizontal: 20,
-                            ),
-                          ),
-                          onPressed: () {
-                            // TODO: Google Auth Implementation später
-                            HapticFeedback.lightImpact();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  "Google Login kommt im nächsten Update!",
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
                         const SizedBox(height: 40),
 
                         // TOGGLE LOGIN/SIGNUP

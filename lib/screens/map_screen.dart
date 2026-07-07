@@ -1,14 +1,15 @@
 // lib/screens/map_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' as latlong;
 import '../services/pub_service.dart';
 import '../models/models.dart';
 import '../widgets/about_shamrock.dart';
 import '../widgets/map_container.dart';
 import '../widgets/brutal_pub_sheet.dart';
-import '../services/auth_service.dart'; // Damit wir abmelden können
+import 'profile_screen.dart';
 
 class MapScreen extends StatefulWidget {
   @override
@@ -17,26 +18,15 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen>
     with SingleTickerProviderStateMixin {
-  GoogleMapController? _mapController;
-  static const LatLng _dublinCenter = LatLng(53.3444, -6.2631);
-  // --------------------------------
-
-  //late GoogleMapController mapController;
+  final MapController _mapController = MapController();
   late AnimationController _fabController;
-  latlong.LatLng _userLocation = latlong.LatLng(53.3498, -6.2603);
-  // Der Service
+
+  // Fallback: Dublin, bis echtes GPS da ist
+  static final latlong.LatLng _dublinCenter = latlong.LatLng(53.3498, -6.2603);
+  latlong.LatLng _userLocation = _dublinCenter;
+  bool _hasRealLocation = false;
+
   final PubService _pubService = PubService();
-  // Standardmäßig Deutsch
-  String _currentLanguageCode = 'de';
-
-  // Helper Map für die Flaggen
-  final Map<String, String> _flags = {
-    'de': '🇩🇪',
-    'en': '🇬🇧', // oder 🇮🇪 für den Guinness Vibe ;)
-    'fr': '🇫🇷',
-  };
-
-  Set<Marker> _markers = {};
 
   @override
   void initState() {
@@ -45,7 +35,37 @@ class _MapScreenState extends State<MapScreen>
       duration: Duration(milliseconds: 300),
       vsync: this,
     );
-    //_createMarkers();
+    _fabController.forward();
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return; // Fallback bleibt Dublin
+      }
+
+      final pos = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+      setState(() {
+        _userLocation = latlong.LatLng(pos.latitude, pos.longitude);
+        _hasRealLocation = true;
+      });
+      try {
+        _mapController.move(_userLocation, 14.0);
+      } catch (_) {
+        // Karte noch nicht gerendert — dann übernimmt initialCenter die Position
+      }
+    } catch (e) {
+      print('GPS Fehler (Fallback Dublin): $e');
+    }
   }
 
   void _showPubDetails(Pub pub) {
@@ -55,10 +75,111 @@ class _MapScreenState extends State<MapScreen>
       context: context,
       isScrollControlled: true, // Wichtig damit es hoch genug wird
       backgroundColor: Colors.transparent, // Wichtig für die runden Ecken
-      builder: (context) => BrutalPubSheet(
-        pub: pub,
-        // ✅ Das ist NEU: Wir müssen dem Sheet sagen, wie es zugeht
-        onClose: () => Navigator.pop(context),
+      builder: (context) =>
+          BrutalPubSheet(pub: pub, onClose: () => Navigator.pop(context)),
+    );
+  }
+
+  // ---------------- PUB HINZUFÜGEN (Long-Press) ----------------
+
+  void _showAddPubDialog(latlong.LatLng point) {
+    HapticFeedback.heavyImpact();
+    final nameController = TextEditingController();
+    final addressController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFD4AF37), width: 1),
+        ),
+        title: const Text(
+          'NEW PUB',
+          style: TextStyle(
+            color: Color(0xFFF5E6D3),
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDialogField(nameController, 'Pub name', autofocus: true),
+            const SizedBox(height: 12),
+            _buildDialogField(addressController, 'Address'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final address = addressController.text.trim();
+              if (name.isEmpty) return;
+
+              Navigator.pop(ctx);
+              try {
+                await _pubService.addPub(
+                  name: name,
+                  address: address,
+                  latitude: point.latitude,
+                  longitude: point.longitude,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('🍺 "$name" wurde hinzugefügt!'),
+                      backgroundColor: const Color(0xFF1A1A1A),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Fehler beim Speichern: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'ADD PUB',
+              style: TextStyle(
+                color: Color(0xFFD4AF37),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDialogField(
+    TextEditingController controller,
+    String hint, {
+    bool autofocus = false,
+  }) {
+    return TextField(
+      controller: controller,
+      autofocus: autofocus,
+      style: const TextStyle(color: Color(0xFFF5E6D3)),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white24),
+        filled: true,
+        fillColor: const Color(0xFF0D0D0D),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Colors.white10),
+        ),
       ),
     );
   }
@@ -71,48 +192,6 @@ class _MapScreenState extends State<MapScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-
-        // --- LINKS: SPRACHE (EDEL & BRUTAL) ---
-        leadingWidth: 70,
-        leading: Center(
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              // Das Menü Design: Dunkel mit Goldrand
-              popupMenuTheme: PopupMenuThemeData(
-                color: const Color(0xFF1A1A1A),
-                textStyle: const TextStyle(color: Color(0xFFF5E6D3)),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                  side: const BorderSide(color: Color(0xFFD4AF37), width: 0.5),
-                ),
-              ),
-            ),
-            child: PopupMenuButton<String>(
-              tooltip: 'Change Language',
-              offset: const Offset(0, 50),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(
-                  _flags[_currentLanguageCode]!,
-                  style: const TextStyle(fontSize: 22),
-                ),
-              ),
-              onSelected: (String code) {
-                setState(() {
-                  _currentLanguageCode = code;
-                  // TODO: Später echte Übersetzung hier triggern
-                });
-              },
-              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                _buildFlagItem('de', 'GERMAN'),
-                const PopupMenuDivider(height: 1),
-                _buildFlagItem('en', 'ENGLISH'),
-                const PopupMenuDivider(height: 1),
-                _buildFlagItem('fr', 'FRENCH'),
-              ],
-            ),
-          ),
-        ),
 
         // --- MITTE: TITEL ---
         title: ShaderMask(
@@ -130,13 +209,15 @@ class _MapScreenState extends State<MapScreen>
           ),
         ),
 
-        // --- RECHTS: ACTIONS ---
+        // --- RECHTS: PROFIL ---
         actions: [
-          // 3. LOGOUT BUTTON
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () async {
-              await AuthService().signOut();
+            icon: const Icon(Icons.person, color: Color(0xFFD4AF37)),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
             },
           ),
         ],
@@ -165,18 +246,17 @@ class _MapScreenState extends State<MapScreen>
           return Stack(
             children: [
               MapContainer(
+                mapController: _mapController,
                 pubs: pubs,
                 center: _userLocation,
                 zoom: 14.0,
                 onMarkerTap: _showPubDetails,
-                onMapTap: (latLng) => print('Map tapped at: $latLng'),
+                onMapTap: (latLng) {},
+                onMapLongPress: _showAddPubDialog,
                 userLocation: _userLocation,
                 showUserLocation: true,
-                onMapCreated: (GoogleMapController controller) {
-                  _mapController = controller;
-                },
               ),
-              // ☘️ NEU: INFO BUTTON UNTEN LINKS
+              // ☘️ INFO BUTTON UNTEN LINKS
               Positioned(
                 left: 16,
                 bottom: 30, // Tief genug für den Daumen
@@ -235,7 +315,9 @@ class _MapScreenState extends State<MapScreen>
           onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text("Klick bitte auf einen Pin, um zu bewerten!"),
+                content: Text(
+                  "Tippe auf einen Pin zum Bewerten — oder halte die Karte gedrückt, um einen Pub anzulegen!",
+                ),
               ),
             );
           },
@@ -254,59 +336,26 @@ class _MapScreenState extends State<MapScreen>
     );
   }
 
-  void _centerOnUserLocation() async {
-    // Wenn wir echte GPS-Daten hätten, würden wir _userLocation nehmen.
-    // Für den Start fliegen wir nach Dublin!
+  void _centerOnUserLocation() {
+    _mapController.move(_userLocation, 15.0);
 
-    if (_mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          const CameraPosition(
-            target: _dublinCenter, // Ab nach Irland!
-            zoom: 15.0, // Schön nah ran an die Pubs
-            tilt: 45.0, // Ein bisschen 3D-Look für den Vibe
-          ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _hasRealLocation
+              ? "Zurück zu deinem Standort 🍺"
+              : "Sláinte! Willkommen in Dublin 🇮🇪 (GPS nicht verfügbar)",
         ),
-      );
-
-      // Kleines Feedback für den User
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Sláinte! Willkommen in Dublin 🇮🇪"),
-          duration: Duration(seconds: 2),
-          backgroundColor: Color(0xFF1A1A1A),
-        ),
-      );
-    }
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF1A1A1A),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _fabController.dispose();
+    _mapController.dispose();
     super.dispose();
-  }
-
-  PopupMenuItem<String> _buildFlagItem(String code, String label) {
-    return PopupMenuItem<String>(
-      value: code,
-      height: 40,
-      child: Row(
-        children: [
-          Text(_flags[code]!, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 12),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-              color: _currentLanguageCode == code
-                  ? const Color(0xFFD4AF37)
-                  : Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

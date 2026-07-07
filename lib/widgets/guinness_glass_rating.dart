@@ -112,7 +112,6 @@ class _NeonGuinnessPainter extends CustomPainter {
     final glassPath = Path();
     final topWidth = glassWidth * 1.0;
     final bottomWidth = glassWidth * 0.7;
-    final neckWidth = glassWidth * 0.85; // Die Engstelle unten
 
     // Start unten links
     glassPath.moveTo(center.dx - bottomWidth / 2, center.dy + glassHeight / 2);

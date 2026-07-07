@@ -340,6 +340,7 @@ class Pub {
 class Review {
   String id;
   String userId;
+  String? userName;
   String pubId;
   final double rating;
   final String comment;
@@ -354,6 +355,7 @@ class Review {
   DateTime createdAt;
 
   int likes;
+  List<String> likedBy;
   bool isPublic;
   GuinnessType? guinnessType;
   double? price;
@@ -374,6 +376,7 @@ class Review {
   Review({
     required this.id,
     required this.userId,
+    this.userName,
     required this.pubId,
     required this.rating,
     required this.comment,
@@ -385,6 +388,7 @@ class Review {
     this.aiColorScore,
     required this.createdAt,
     this.likes = 0,
+    this.likedBy = const [],
     this.isPublic = true,
     this.guinnessType,
     this.price,
@@ -406,6 +410,7 @@ class Review {
     return Review(
       id: snapshot.id,
       userId: data['userId'],
+      userName: data['userName'],
       pubId: data['pubId'],
       rating: (data['rating'] as num? ?? 0.0).toDouble(),
       comment: data['comment'] ?? '',
@@ -416,8 +421,10 @@ class Review {
       photoUrls: List<String>.from(data['photoUrls'] ?? []),
       isPerfectPour: data['isPerfectPour'] ?? false,
       aiColorScore: (data['aiColorScore'] as num? ?? 0.0).toDouble(),
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      // Direkt nach dem Posten ist der serverTimestamp lokal noch null
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       likes: (data['likes'] as num? ?? 0).toInt(),
+      likedBy: List<String>.from(data['likedBy'] ?? []),
       isPublic: data['isPublic'] ?? true,
       guinnessType: data['guinnessType'] != null
           ? GuinnessType.values[data['guinnessType'] as int]
@@ -430,6 +437,7 @@ class Review {
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
+      'userName': userName,
       'pubId': pubId,
       'rating': rating,
       'comment': comment,
@@ -441,6 +449,7 @@ class Review {
       'aiColorScore': aiColorScore,
       'createdAt': Timestamp.fromDate(createdAt),
       'likes': likes,
+      'likedBy': likedBy,
       'isPublic': isPublic,
       'guinnessType': guinnessType?.index,
       'price': price,
@@ -515,8 +524,6 @@ class Badge {
         }
         return false;
       case BadgeType.SPECIAL:
-        return false;
-      default:
         return false;
     }
   }
