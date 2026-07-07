@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/models.dart';
 import '../screens/review_screen.dart';
 import '../providers/review_provider.dart';
+import '../services/review_service.dart';
 import 'package:provider/provider.dart';
 
 class BrutalPubSheet extends StatelessWidget {
@@ -231,6 +232,9 @@ class BrutalPubSheet extends StatelessWidget {
 
               const SizedBox(height: 24),
 
+              // BESTES FOTO (höchstbewertetes Review mit Bild)
+              _buildBestPhotoBanner(liveReviews),
+
               // RATE BUTTON
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -389,6 +393,270 @@ class BrutalPubSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBestPhotoBanner(List<Review> reviews) {
+    final withPhoto = reviews.where((r) => r.primaryPhotoUrl != null).toList()
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+    if (withPhoto.isEmpty) return const SizedBox.shrink();
+    final best = withPhoto.first;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          children: [
+            Image.network(
+              best.primaryPhotoUrl!,
+              height: 120,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint(
+                  'Best-Pour-Foto konnte nicht geladen werden: $error',
+                );
+                return const SizedBox.shrink();
+              },
+            ),
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '📸 BEST POUR · ${best.rating.toStringAsFixed(1)}',
+                  style: const TextStyle(
+                    color: Color(0xFFD4AF37),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Bearbeiten/Löschen — nur für eigene Reviews sichtbar
+  Widget _buildOwnerActions(BuildContext context, Review review) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || review.userId != uid) return const SizedBox.shrink();
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () => _showEditDialog(context, review),
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Icon(Icons.edit_outlined, size: 16, color: Colors.white38),
+          ),
+        ),
+        GestureDetector(
+          onTap: () => _confirmDelete(context, review),
+          behavior: HitTestBehavior.opaque,
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Icon(Icons.delete_outline, size: 16, color: Colors.white38),
+          ),
+        ),
+        const SizedBox(width: 6),
+      ],
+    );
+  }
+
+  void _confirmDelete(BuildContext context, Review review) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.red.withOpacity(0.5)),
+        ),
+        title: const Text(
+          'REVIEW LÖSCHEN?',
+          style: TextStyle(
+            color: Color(0xFFF5E6D3),
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+            fontSize: 16,
+          ),
+        ),
+        content: const Text(
+          'Das Review und sein Foto werden dauerhaft gelöscht.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              HapticFeedback.mediumImpact();
+              try {
+                await ReviewService().deleteReview(review);
+              } catch (e) {
+                debugPrint('Löschen fehlgeschlagen: $e');
+              }
+            },
+            child: const Text(
+              'DELETE',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, Review review) {
+    double rating = review.rating;
+    final commentController = TextEditingController(text: review.comment);
+    final priceController = TextEditingController(
+      text: (review.price != null && review.price! > 0)
+          ? review.price!.toStringAsFixed(2)
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFD4AF37), width: 1),
+          ),
+          title: const Text(
+            'EDIT REVIEW',
+            style: TextStyle(
+              color: Color(0xFFF5E6D3),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+              fontSize: 16,
+            ),
+          ),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'RATING',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: const TextStyle(
+                        color: Color(0xFFD4AF37),
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: rating,
+                  min: 1.0,
+                  max: 10.0,
+                  divisions: 90,
+                  activeColor: const Color(0xFFD4AF37),
+                  inactiveColor: Colors.white10,
+                  onChanged: (v) => setDialogState(() => rating = v),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: commentController,
+                  maxLines: 3,
+                  style: const TextStyle(color: Color(0xFFF5E6D3)),
+                  decoration: _editFieldDecoration('Kommentar'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: const TextStyle(color: Color(0xFFF5E6D3)),
+                  decoration: _editFieldDecoration('Preis (€)'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'CANCEL',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                HapticFeedback.mediumImpact();
+                try {
+                  await ReviewService().updateReview(
+                    review,
+                    rating: rating,
+                    comment: commentController.text.trim(),
+                    price: double.tryParse(
+                      priceController.text.replaceAll(',', '.'),
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('Bearbeiten fehlgeschlagen: $e');
+                }
+              },
+              child: const Text(
+                'SAVE',
+                style: TextStyle(
+                  color: Color(0xFFD4AF37),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _editFieldDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.white24),
+      filled: true,
+      fillColor: const Color(0xFF0D0D0D),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.white10),
       ),
     );
   }
@@ -622,6 +890,7 @@ class BrutalPubSheet extends StatelessWidget {
                     ),
                   ),
                 const Spacer(),
+                _buildOwnerActions(context, review),
                 _buildLikeButton(review),
               ],
             ),

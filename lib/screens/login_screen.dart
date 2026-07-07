@@ -83,6 +83,92 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
+  void _showResetPasswordDialog() {
+    HapticFeedback.selectionClick();
+    final resetController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFD4AF37), width: 1),
+        ),
+        title: const Text(
+          'PASSWORT ZURÜCKSETZEN',
+          style: TextStyle(
+            color: Color(0xFFF5E6D3),
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+            fontSize: 15,
+          ),
+        ),
+        content: TextField(
+          controller: resetController,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          style: const TextStyle(color: Color(0xFFF5E6D3)),
+          decoration: InputDecoration(
+            hintText: 'deine@email.com',
+            hintStyle: const TextStyle(color: Colors.white24),
+            filled: true,
+            fillColor: const Color(0xFF0D0D0D),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Colors.white10),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final email = resetController.text.trim();
+              if (email.isEmpty) return;
+              Navigator.pop(ctx);
+              try {
+                await _auth.sendPasswordResetEmail(email);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF1A1A1A),
+                      content: Text('📬 Reset-Mail an $email geschickt!'),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: Colors.red.withOpacity(0.9),
+                      content: Text('Fehler: $e'),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'SENDEN',
+              style: TextStyle(
+                color: Color(0xFFD4AF37),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     // Haptisches Feedback: Ein schwerer Klick
     HapticFeedback.mediumImpact();
@@ -279,6 +365,21 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ),
                         ),
+
+                        if (_isLogin) ...[
+                          const SizedBox(height: 16),
+                          GestureDetector(
+                            onTap: _showResetPasswordDialog,
+                            child: Text(
+                              "PASSWORT VERGESSEN?",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.35),
+                                letterSpacing: 1.2,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

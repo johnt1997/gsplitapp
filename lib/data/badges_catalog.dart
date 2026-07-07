@@ -24,6 +24,16 @@ final List<Badge> badgesCatalog = [
     type: BadgeType.PASSPORT,
     requirement: {'requiredPubs': 10},
   ),
+  Badge(
+    id: 'passport_legend',
+    name: 'Pub Legend',
+    description: 'Bewerte Pints in 25 verschiedenen Pubs. Absolute Legende.',
+    iconPath: 'explore',
+    colorArgb: 0xFFF5E6D3,
+    tier: 3,
+    type: BadgeType.PASSPORT,
+    requirement: {'requiredPubs': 25},
+  ),
 
   // ---------- VARIETY (verschiedene Guinness-Typen) ----------
   Badge(
@@ -35,6 +45,16 @@ final List<Badge> badgesCatalog = [
     tier: 1,
     type: BadgeType.VARIETY,
     requirement: {'requiredTypes': 3},
+  ),
+  Badge(
+    id: 'variety_professor',
+    name: 'Stout Professor',
+    description: 'Probiere 5 verschiedene Guinness-Typen.',
+    iconPath: 'variety',
+    colorArgb: 0xFF50C878,
+    tier: 2,
+    type: BadgeType.VARIETY,
+    requirement: {'requiredTypes': 5},
   ),
 
   // ---------- QUALITY ----------
@@ -99,5 +119,16 @@ final List<Badge> badgesCatalog = [
     tier: 2,
     type: BadgeType.TIMING,
     requirement: {'days': 3},
+  ),
+  Badge(
+    // "Streak Master" muss im Namen stehen (checkUnlock matcht per Substring)
+    id: 'timing_streak_master_2',
+    name: 'Streak Master II',
+    description: 'Eine ganze Woche: 7 Tage in Folge ein Pint bewerten.',
+    iconPath: 'timing',
+    colorArgb: 0xFFF5E6D3,
+    tier: 3,
+    type: BadgeType.TIMING,
+    requirement: {'days': 7},
   ),
 ];

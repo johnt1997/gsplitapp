@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Badge;
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../services/ai_service.dart';
+import '../services/review_service.dart';
 import '../services/user_stats_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -168,7 +169,7 @@ class ReviewProvider extends ChangeNotifier {
 
   // ---------------- SPEICHERN (Das Wichtigste) ----------------
 
-  Future<void> submitReview(String pubId) async {
+  Future<void> submitReview(String pubId, {String? pubName}) async {
     if (!isValid || _isSubmitting) return;
 
     // Review gehört immer dem eingeloggten User — keine IDs von außen
@@ -224,6 +225,7 @@ class ReviewProvider extends ChangeNotifier {
       final reviewData = {
         'reviewId': reviewId,
         'pubId': pubId,
+        'pubName': pubName,
         'userId': user.uid,
         'userName': userName,
 
@@ -253,27 +255,8 @@ class ReviewProvider extends ChangeNotifier {
       // Ab nach Firestore
       await _db.collection('reviews').add(reviewData);
 
-      // 2. --- QUICK FIX: PUB STATS AKTUALISIEREN ---
-      // Wir holen alle Reviews für diesen Pub, um den neuen Schnitt zu berechnen
-      final allReviewsQuery = await _db
-          .collection('reviews')
-          .where('pubId', isEqualTo: pubId)
-          .get();
-
-      if (allReviewsQuery.docs.isNotEmpty) {
-        double totalRating = 0;
-        for (var doc in allReviewsQuery.docs) {
-          // Wir nutzen 'rating' (unser neues Feld)
-          totalRating += (doc.data()['rating'] as num? ?? 0).toDouble();
-        }
-        double newAverage = totalRating / allReviewsQuery.docs.length;
-        // Jetzt schreiben wir den neuen Schnitt direkt zurück in das Pub-Dokument
-        await _db.collection('pubs').doc(pubId).update({
-          'averageRating': newAverage,
-          'reviewCount': allReviewsQuery.docs.length,
-          'isHot': newAverage >= 7.5, // Optional: Setzt isHot automatisch
-        });
-      }
+      // 2. --- PUB STATS AKTUALISIEREN ---
+      await ReviewService().recalcPubStats(pubId);
 
       // 3. --- USER-STATS & BADGES (nicht fatal bei Fehler) ---
       try {

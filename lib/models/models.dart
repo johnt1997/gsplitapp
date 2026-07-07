@@ -342,6 +342,7 @@ class Review {
   String userId;
   String? userName;
   String pubId;
+  String? pubName;
   final double rating;
   final String comment;
   double shtickRating;
@@ -378,6 +379,7 @@ class Review {
     required this.userId,
     this.userName,
     required this.pubId,
+    this.pubName,
     required this.rating,
     required this.comment,
     required this.shtickRating,
@@ -412,6 +414,7 @@ class Review {
       userId: data['userId'],
       userName: data['userName'],
       pubId: data['pubId'],
+      pubName: data['pubName'],
       rating: (data['rating'] as num? ?? 0.0).toDouble(),
       comment: data['comment'] ?? '',
       shtickRating: (data['shtickRating'] as num? ?? 0.0).toDouble(),
@@ -439,6 +442,7 @@ class Review {
       'userId': userId,
       'userName': userName,
       'pubId': pubId,
+      'pubName': pubName,
       'rating': rating,
       'comment': comment,
       'shtickRating': shtickRating,

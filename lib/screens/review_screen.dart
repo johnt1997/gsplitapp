@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' as io;
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -684,8 +685,19 @@ class _ReviewScreenState extends State<ReviewScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.check_circle, size: 80, color: Color(0xFF50C878)),
-            SizedBox(height: 24),
+            SizedBox(
+              width: 160,
+              height: 160,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Konfetti nur beim Perfect Pour
+                  if (provider.isPerfectPour) const _SparkleBurst(),
+                  Icon(Icons.check_circle, size: 80, color: Color(0xFF50C878)),
+                ],
+              ),
+            ),
+            SizedBox(height: 8),
             Text(
               'REVIEW POSTED!',
               style: TextStyle(
@@ -694,6 +706,18 @@ class _ReviewScreenState extends State<ReviewScreen>
                 fontWeight: FontWeight.w900,
               ),
             ),
+            if (provider.isPerfectPour) ...[
+              SizedBox(height: 8),
+              Text(
+                '🍀 PERFECT POUR!',
+                style: TextStyle(
+                  color: Color(0xFFD4AF37),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
             if (provider.newBadges.isNotEmpty) ...[
               SizedBox(height: 40),
               Text(
@@ -764,7 +788,7 @@ class _ReviewScreenState extends State<ReviewScreen>
 
     try {
       // Aufruf der echten Provider-Methode
-      await provider.submitReview(widget.pubId);
+      await provider.submitReview(widget.pubId, pubName: widget.pubName);
 
       // Wenn erfolgreich -> Schließen (mit Badge-Unlock etwas länger anzeigen)
       if (provider.state == ReviewState.SUCCESS && mounted) {
@@ -795,6 +819,71 @@ class _ReviewScreenState extends State<ReviewScreen>
       labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white),
     );
   }
+}
+
+// Konfetti-Burst für den Perfect Pour (goldene Partikel fliegen nach außen)
+class _SparkleBurst extends StatefulWidget {
+  const _SparkleBurst();
+
+  @override
+  State<_SparkleBurst> createState() => _SparkleBurstState();
+}
+
+class _SparkleBurstState extends State<_SparkleBurst>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => CustomPaint(
+        size: const Size(160, 160),
+        painter: _SparklePainter(progress: _controller.value),
+      ),
+    );
+  }
+}
+
+class _SparklePainter extends CustomPainter {
+  final double progress;
+  _SparklePainter({required this.progress});
+
+  static const _colors = [
+    Color(0xFFD4AF37),
+    Color(0xFFF5E6D3),
+    Color(0xFF50C878),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const count = 14;
+    for (var i = 0; i < count; i++) {
+      final angle = (i / count) * 2 * pi;
+      // Jedes Partikel ist zeitversetzt: fliegt nach außen und fadet aus
+      final t = (progress + i / count) % 1.0;
+      final radius = 35 + t * 45;
+      final opacity = (1 - t).clamp(0.0, 1.0);
+      final paint = Paint()
+        ..color = _colors[i % _colors.length].withOpacity(opacity);
+      final pos = center + Offset(cos(angle) * radius, sin(angle) * radius);
+      canvas.drawCircle(pos, 3 * (1 - t) + 1, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SparklePainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 // Helper Class für die AI Animation (falls du sie brauchst)

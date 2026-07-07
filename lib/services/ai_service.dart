@@ -66,9 +66,7 @@ If it is clearly not a Guinness or beer, set "is_guinness" to false and score to
       );
 
       if (response.statusCode != 200) {
-        throw Exception(
-          "OpenAI HTTP ${response.statusCode}: ${response.body}",
-        );
+        throw Exception("OpenAI HTTP ${response.statusCode}: ${response.body}");
       }
 
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));

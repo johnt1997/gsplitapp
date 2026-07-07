@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../data/badges_catalog.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
+import '../services/review_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -21,7 +22,10 @@ class ProfileScreen extends StatelessWidget {
       return const Scaffold(
         backgroundColor: Color(0xFF0D0D0D),
         body: Center(
-          child: Text('Nicht eingeloggt', style: TextStyle(color: Colors.white)),
+          child: Text(
+            'Nicht eingeloggt',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       );
     }
@@ -62,9 +66,7 @@ class ProfileScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, userSnap) {
           if (userSnap.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: _gold),
-            );
+            return const Center(child: CircularProgressIndicator(color: _gold));
           }
           if (!userSnap.hasData || !userSnap.data!.exists) {
             return const Center(
@@ -277,13 +279,62 @@ class ProfileScreen extends StatelessWidget {
         }
 
         return Column(
-          children: reviews.map(_historyItem).toList(),
+          children: reviews.map((r) => _historyItem(context, r)).toList(),
         );
       },
     );
   }
 
-  Widget _historyItem(Review review) {
+  void _confirmDelete(BuildContext context, Review review) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _dark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.red.withOpacity(0.5)),
+        ),
+        title: const Text(
+          'REVIEW LÖSCHEN?',
+          style: TextStyle(
+            color: _cream,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+            fontSize: 16,
+          ),
+        ),
+        content: const Text(
+          'Das Review und sein Foto werden dauerhaft gelöscht.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ReviewService().deleteReview(review);
+              } catch (e) {
+                debugPrint('Löschen fehlgeschlagen: $e');
+              }
+            },
+            child: const Text(
+              'DELETE',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _historyItem(BuildContext context, Review review) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -344,6 +395,19 @@ class ProfileScreen extends StatelessWidget {
           Text(
             "${review.createdAt.day.toString().padLeft(2, '0')}.${review.createdAt.month.toString().padLeft(2, '0')}.${review.createdAt.year}",
             style: const TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => _confirmDelete(context, review),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(
+                Icons.delete_outline,
+                size: 16,
+                color: Colors.white38,
+              ),
+            ),
           ),
         ],
       ),
